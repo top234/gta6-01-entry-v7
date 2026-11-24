@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>TOPAZ BAY — Open-World Crime</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1e3a;
+    font-family: Arial, Helvetica, sans-serif; color: #fff; }
+  #scene-container { position: fixed; inset: 0; }
+  #scene-container canvas { display: block; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD: big, high-contrast, readable at quarter size ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+  .panel { background: rgba(0,0,0,0.58); border: 3px solid rgba(255,255,255,0.85);
+    border-radius: 10px; padding: 8px 12px; }
+  #minimap-wrap { position: absolute; top: 14px; left: 14px; }
+  #minimap { width: 240px; height: 240px; display: block; border-radius: 8px;
+    border: 4px solid #fff; background: #123; }
+  #minimap-district { margin-top: 6px; font-size: 24px; font-weight: 900; letter-spacing: 1px;
+    color: #ffd23f; text-shadow: 2px 2px 0 #000; text-align: center; }
+  #minimap-clock { font-size: 20px; font-weight: 900; color: #fff;
+    text-shadow: 2px 2px 0 #000; text-align: center; }
+  #top-right { position: absolute; top: 14px; right: 14px; text-align: right; }
+  #wanted { font-size: 52px; line-height: 1; letter-spacing: 4px; color: #ffd23f;
+    text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255,60,60,0.9); }
+  #wanted .off { color: rgba(255,255,255,0.28); text-shadow: 2px 2px 0 #000; }
+  #money { margin-top: 6px; font-size: 34px; font-weight: 900; color: #7dff9a;
+    text-shadow: 2px 2px 0 #000; }
+  #bars { margin-top: 8px; width: 250px; margin-left: auto; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .bar-label { font-size: 18px; font-weight: 900; width: 64px; text-shadow: 2px 2px 0 #000; }
+  .bar-track { flex: 1; height: 16px; background: rgba(0,0,0,0.6); border: 2px solid #fff; border-radius: 8px; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  #health-fill { background: #2fbf71; width: 100%; }
+  #armor-fill { background: #4aa8ff; width: 0%; }
+  #objective-banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+    max-width: 640px; text-align: center; font-size: 27px; font-weight: 900; letter-spacing: 1px;
+    background: rgba(0,0,0,0.72); border: 3px solid #ffd23f; color: #ffd23f;
+    padding: 10px 22px; border-radius: 10px; text-shadow: 2px 2px 0 #000; }
+  #bottom-left { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 12px; align-items: flex-end; }
+  #speed-chip { text-align: center; min-width: 150px; }
+  #speed-value { font-size: 58px; font-weight: 900; line-height: 1; color: #fff; text-shadow: 3px 3px 0 #000; }
+  #speed-unit { font-size: 20px; font-weight: 900; color: #ffd23f; }
+  #weapon-chip { font-size: 24px; font-weight: 900; }
+  #weapon-chip small { display: block; font-size: 15px; color: #ffd23f; }
+  #crew-chips { display: flex; flex-direction: column; gap: 6px; }
+  .crew-chip { font-size: 17px; font-weight: 900; padding: 6px 10px; }
+  .crew-chip .cd { color: #ffd23f; }
+  #radio-ticker { position: absolute; right: 14px; bottom: 14px; text-align: right;
+    font-size: 21px; font-weight: 900; max-width: 460px; }
+  #radio-ticker .station { color: #ffd23f; }
+  #dispatch-line { margin-top: 4px; font-size: 17px; color: #9fd4ff; }
+  #prompt { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%);
+    font-size: 26px; font-weight: 900; background: rgba(0,0,0,0.75); border: 3px solid #fff;
+    padding: 10px 24px; border-radius: 10px; }
+  #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    font-size: 34px; font-weight: 900; color: #fff; text-shadow: 2px 2px 0 #000; }
+  #banner-center { position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
+    font-size: 44px; font-weight: 900; letter-spacing: 2px; color: #ffd23f;
+    background: rgba(0,0,0,0.78); border: 4px solid #ffd23f; padding: 14px 34px;
+    border-radius: 12px; text-shadow: 3px 3px 0 #000; text-align: center; }
+  #damage-vignette { position: absolute; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 120px 60px rgba(255,0,0,0.55); opacity: 0; }
+  #bust-meter { position: absolute; left: 50%; top: 120px; transform: translateX(-50%);
+    font-size: 24px; font-weight: 900; color: #ff6b6b; background: rgba(0,0,0,0.7);
+    border: 3px solid #ff6b6b; padding: 8px 20px; border-radius: 10px; }
+
+  /* ---------- Weapon wheel ---------- */
+  #weapon-wheel { position: absolute; left: 50%; top: 50%; width: 420px; height: 420px;
+    transform: translate(-50%,-50%); border-radius: 50%; display: none;
+    background: rgba(0,0,0,0.55); border: 4px solid rgba(255,255,255,0.7); }
+  #weapon-wheel.open { display: block; }
+  #weapon-wheel .wheel-title { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    font-size: 22px; font-weight: 900; color: #ffd23f; text-align: center; }
+  .wheel-slot { position: absolute; width: 150px; text-align: center; font-size: 22px; font-weight: 900;
+    background: rgba(0,0,0,0.75); border: 3px solid #fff; border-radius: 10px; padding: 10px 6px;
+    pointer-events: auto; cursor: pointer; }
+  .wheel-slot small { display: block; font-size: 14px; color: #ffd23f; }
+  .wheel-slot.selected { border-color: #ffd23f; background: rgba(90,60,0,0.9); }
+  .wheel-slot[data-i="0"] { left: 135px; top: 12px; }
+  .wheel-slot[data-i="1"] { right: 6px; top: 150px; }
+  .wheel-slot[data-i="2"] { left: 135px; bottom: 12px; }
+  .wheel-slot[data-i="3"] { left: 6px; top: 150px; }
+
+  /* ---------- Full screens ---------- */
+  .screen { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; }
+  #title-screen { background: linear-gradient(rgba(4,24,48,0.62), rgba(4,24,48,0.82)); }
+  #logo { font-size: 110px; font-weight: 900; letter-spacing: 6px; line-height: 0.95;
+    background: linear-gradient(#ffe27a, #ff9a3d 55%, #ff5e3a); -webkit-background-clip: text;
+    background-clip: text; color: transparent; filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.9)); }
+  #tagline { font-size: 26px; font-weight: 900; letter-spacing: 3px; color: #fff;
+    text-shadow: 2px 2px 0 #000; margin-top: 6px; }
+  #feature-strip { margin-top: 18px; font-size: 21px; font-weight: 900; letter-spacing: 1px;
+    background: #ffd23f; color: #111; padding: 12px 26px; border-radius: 8px; }
+  #save-slots { margin-top: 20px; display: flex; gap: 14px; }
+  .save-slot { width: 240px; background: rgba(0,0,0,0.7); border: 3px solid #fff; border-radius: 10px;
+    padding: 12px; cursor: pointer; }
+  .save-slot b { font-size: 22px; }
+  .save-slot span { display: block; font-size: 14px; color: #ffd23f; margin-top: 4px; }
+  .save-slot:hover { border-color: #ffd23f; }
+  .big-btn { margin-top: 22px; font-size: 30px; font-weight: 900; letter-spacing: 2px;
+    background: #ffd23f; color: #111; border: none; border-radius: 10px; padding: 16px 54px; cursor: pointer; }
+  .big-btn:hover { background: #ffe27a; }
+  .btn { font-size: 20px; font-weight: 900; background: #222; color: #fff; border: 3px solid #fff;
+    border-radius: 8px; padding: 10px 26px; cursor: pointer; margin: 5px; }
+  .btn:hover { border-color: #ffd23f; color: #ffd23f; }
+  #controls-line { margin-top: 18px; font-size: 16px; color: #ddd; line-height: 1.7;
+    text-shadow: 1px 1px 0 #000; }
+  #pause-screen, #mission-end-screen, #busted-screen, #wasted-screen { background: rgba(0,0,0,0.72); }
+  .screen h2 { font-size: 56px; margin: 0 0 10px; letter-spacing: 2px; }
+  .screen p { font-size: 22px; max-width: 720px; line-height: 1.5; }
+  #status-screen { background: rgba(2,16,32,0.94); justify-content: flex-start; padding-top: 26px; overflow: auto; }
+  #status-screen h2 { font-size: 46px; color: #ffd23f; }
+  #status-grid { display: flex; gap: 18px; margin-top: 8px; text-align: left; }
+  .status-col { width: 400px; background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 10px; padding: 14px 18px; }
+  .status-col h3 { font-size: 24px; color: #ffd23f; margin: 0 0 10px; }
+  .status-row { font-size: 20px; font-weight: 700; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.14); }
+  .status-row .done { color: #7dff9a; }
+  .status-row .todo { color: #bbb; }
+  .stand-row { font-size: 18px; font-weight: 700; margin: 7px 0; }
+  .stand-track { height: 14px; background: rgba(0,0,0,0.6); border: 2px solid #fff; border-radius: 7px; margin-top: 3px; }
+  .stand-fill { height: 100%; background: #2fbf71; border-radius: 5px; }
+  #briefing-screen { justify-content: flex-end; background: linear-gradient(transparent 40%, rgba(0,0,0,0.85)); }
+  #briefing-box { width: 860px; background: rgba(0,0,0,0.88); border: 4px solid #ffd23f; border-radius: 12px;
+    padding: 22px 28px; margin-bottom: 40px; text-align: left; }
+  #briefing-box h2 { font-size: 34px; color: #ffd23f; margin: 0 0 8px; }
+  #briefing-lines p { font-size: 22px; margin: 8px 0; line-height: 1.45; }
+  #briefing-lines b { color: #ffd23f; }
+  #garage-screen { background: rgba(2,16,32,0.94); }
+  #garage-list { text-align: left; width: 760px; }
+  .garage-row { display: flex; justify-content: space-between; align-items: center;
+    background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 10px; padding: 12px 18px; margin: 8px 0; font-size: 20px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="scene-container"></div>
+
+<div id="hud" class="hidden">
+  <div id="minimap-wrap">
+    <canvas id="minimap" width="240" height="240"></canvas>
+    <div id="minimap-district">DOWNTOWN</div>
+    <div id="minimap-clock">10:12</div>
+  </div>
+  <div id="top-right">
+    <div id="wanted">☆☆☆☆☆</div>
+    <div id="money">$500</div>
+    <div id="bars">
+      <div class="bar-row"><span class="bar-label">HEALTH</span><div class="bar-track"><div id="health-fill" class="bar-fill"></div></div></div>
+      <div class="bar-row"><span class="bar-label">ARMOR</span><div class="bar-track"><div id="armor-fill" class="bar-fill"></div></div></div>
+    </div>
+  </div>
+  <div id="objective-banner">PRESS M TO START MISSION 1</div>
+  <div id="bust-meter" class="hidden">BUSTED IN 3…2…1 — RUN!</div>
+  <div id="bottom-left">
+    <div id="speed-chip" class="panel"><div id="speed-value">0</div><div id="speed-unit">KM/H</div></div>
+    <div id="weapon-chip" class="panel"><small>WEAPON [Q]</small><span id="weapon-name">FISTS</span></div>
+    <div id="crew-chips"></div>
+  </div>
+  <div id="radio-ticker" class="panel">
+    <div><span class="station" id="radio-station">BAY FM 88.5</span> — <span id="radio-song">Golden Hour Drive</span></div>
+    <div id="dispatch-line">TBPD DISPATCH: ALL UNITS, STANDBY.</div>
+  </div>
+  <div id="prompt" class="hidden">PRESS E</div>
+  <div id="crosshair" class="hidden">+</div>
+  <div id="banner-center" class="hidden"></div>
+  <div id="damage-vignette"></div>
+  <div id="weapon-wheel">
+    <div class="wheel-title">WEAPON<br>WHEEL</div>
+    <div class="wheel-slot" data-i="0">FISTS<small>MELEE</small></div>
+    <div class="wheel-slot" data-i="1">PISTOL<small>HARBOR PISTOL</small></div>
+    <div class="wheel-slot" data-i="2">SMG<small>STREET SMG</small></div>
+    <div class="wheel-slot" data-i="3">SHOTGUN<small>BAY SHOTGUN</small></div>
+  </div>
+</div>
+
+<div id="title-screen" class="screen">
+  <div id="logo">TOPAZ BAY</div>
+  <div id="tagline">A SUN-SOAKED OPEN-WORLD CRIME STORY</div>
+  <div id="feature-strip">10 STORY MISSIONS &nbsp;•&nbsp; 5-STAR POLICE &nbsp;•&nbsp; CREW &nbsp;•&nbsp; GARAGE &nbsp;•&nbsp; STREET RACES &nbsp;•&nbsp; RADIO &nbsp;•&nbsp; SAVES</div>
+  <div id="save-slots"></div>
+  <button id="start-btn" class="big-btn">▶ START GAME</button>
+  <div id="controls-line">
+    WASD move / drive &nbsp;•&nbsp; MOUSE DRAG camera &nbsp;•&nbsp; CLICK shoot &nbsp;•&nbsp; E enter &amp; steal cars &nbsp;•&nbsp; Q weapon wheel<br>
+    R radio &nbsp;•&nbsp; 1-3 crew abilities &nbsp;•&nbsp; M mission &nbsp;•&nbsp; G garage &nbsp;•&nbsp; T race &nbsp;•&nbsp; TAB status &nbsp;•&nbsp; ESC pause &amp; save
+  </div>
+</div>
+
+<div id="pause-screen" class="screen hidden">
+  <h2>PAUSED</h2>
+  <p id="pause-summary">TOPAZ BAY</p>
+  <div>
+    <button id="resume-btn" class="btn">RESUME</button>
+    <button id="status-btn" class="btn">STATUS &amp; PROGRESS</button>
+    <button id="save-btn" class="btn">SAVE GAME</button>
+    <button id="quit-btn" class="btn">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="status-screen" class="screen hidden">
+  <h2>★ TOPAZ BAY — STATUS ★</h2>
+  <div id="status-grid">
+    <div class="status-col"><h3>STORY MISSIONS</h3><div id="status-missions"></div></div>
+    <div class="status-col"><h3>CREW &amp; GARAGE</h3><div id="status-crew"></div><div id="status-garage"></div></div>
+    <div class="status-col"><h3>DISTRICT STANDING</h3><div id="status-standing"></div><h3 style="margin-top:16px">STATS</h3><div id="status-stats"></div></div>
+  </div>
+  <button id="status-close" class="btn" style="margin-top:18px">CLOSE [TAB]</button>
+</div>
+
+<div id="briefing-screen" class="screen hidden">
+  <div id="briefing-box">
+    <h2 id="briefing-title">MISSION 1</h2>
+    <div id="briefing-lines"></div>
+    <button id="briefing-start" class="big-btn" style="font-size:22px;padding:12px 34px">▶ START MISSION</button>
+  </div>
+</div>
+
+<div id="garage-screen" class="screen hidden">
+  <h2>SUNSET HILLS GARAGE</h2>
+  <p id="garage-money">$500</p>
+  <div id="garage-list"></div>
+  <p id="garage-message"></p>
+  <button id="garage-close" class="btn">CLOSE [G]</button>
+</div>
+
+<div id="mission-end-screen" class="screen hidden">
+  <h2 id="mission-end-title">MISSION COMPLETE</h2>
+  <p id="mission-end-text"></p>
+  <button id="mission-end-btn" class="big-btn" style="font-size:22px;padding:12px 34px">CONTINUE</button>
+</div>
+
+<div id="busted-screen" class="screen hidden">
+  <h2 style="color:#ff6b6b">BUSTED!</h2>
+  <p id="busted-text">The TBPD caught Reno. Bail and impound fees apply.</p>
+  <button id="busted-btn" class="big-btn" style="font-size:22px;padding:12px 34px">WALK FREE — RESPAWN</button>
+</div>
+
+<div id="wasted-screen" class="screen hidden">
+  <h2 style="color:#ff6b6b">WASTED</h2>
+  <p id="wasted-text">Reno went down. The hospital patches him up — for a price.</p>
+  <button id="wasted-btn" class="big-btn" style="font-size:22px;padding:12px 34px">LEAVE HOSPITAL</button>
+</div>
+
+<script src="./vendor/three.min.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
